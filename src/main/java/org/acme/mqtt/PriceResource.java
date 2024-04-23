@@ -12,10 +12,6 @@ import java.util.concurrent.Executors;
 import io.smallrye.mutiny.Multi;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Message;
-import org.eclipse.microprofile.reactive.messaging.Metadata;
-import java.util.Optional;
-
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -50,6 +46,8 @@ public class PriceResource {
             int i = 0;
             String token = "";
             Map<String, String> headers = new HashMap<>();
+            headers.put("Authorization", token);
+
             while (true) {
                 headers.put("Authorization", "12345");
 
@@ -60,10 +58,13 @@ public class PriceResource {
                 }
                 Message<String> mqttMessage = Message.of(String.valueOf(i)).addMetadata(headers);
 
-
-            
+                System.out.println("Message payload: " + mqttMessage.getPayload());
+                System.out.println("Message headers: ");
+                for (Map.Entry<String, String> entry : headers.entrySet()) {
+                    System.out.println(entry.getKey() + ": " + entry.getValue());
+                }
                 mqttMessageEmitter.send(mqttMessage);
-                System.out.println("Message sent: " + i );
+                System.out.println("Message sent: " + i);
                 i++;
                 headers.clear();
             }

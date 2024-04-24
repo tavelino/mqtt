@@ -9,12 +9,12 @@ import org.eclipse.microprofile.reactive.messaging.Emitter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import io.smallrye.mutiny.Multi;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Message;
+
 import java.util.HashMap;
 import java.util.Map;
-
+import java.util.Optional;
 import java.util.Random;
 
 /**
@@ -34,8 +34,6 @@ public class MqttResource {
         System.out.println("Stream");
         return "hello";
     }
-
-    private Random random = new Random();
 
     @GET
     @Path("/send")
@@ -60,9 +58,6 @@ public class MqttResource {
 
                 System.out.println("Message payload: " + mqttMessage.getPayload());
                 System.out.println("Message headers: ");
-                for (Map.Entry<String, String> entry : headers.entrySet()) {
-                    System.out.println(entry.getKey() + ": " + entry.getValue());
-                }
                 mqttMessageEmitter.send(mqttMessage);
                 System.out.println("Message sent: " + i);
                 i++;

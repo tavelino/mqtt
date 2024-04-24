@@ -32,6 +32,10 @@
       <artifactId>quarkus-rest</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-clients</artifactId>
+    </dependency>
+    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-messaging-mqtt</artifactId>
     </dependency>
@@ -58,6 +62,10 @@
     <dependency>
         <groupId>io.quarkus</groupId>
         <artifactId>quarkus-openshift</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-clients</artifactId>
     </dependency>
   </dependencies>
   <build>

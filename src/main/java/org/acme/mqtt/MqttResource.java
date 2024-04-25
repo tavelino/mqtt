@@ -5,17 +5,12 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
-import org.eclipse.microprofile.reactive.messaging.Emitter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.eclipse.microprofile.reactive.messaging.Channel;
-import org.eclipse.microprofile.reactive.messaging.Message;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Random;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
 
 /**
  * A simple resource retrieving the "in-memory" "my-data-stream" and sending the
@@ -24,9 +19,11 @@ import java.util.Random;
 @Path("/mqtt")
 public class MqttResource {
 
-    @Inject
-    @Channel("mqtt-message-out/1/2")
-    Emitter<String> mqttMessageEmitter;
+    private static final String MQTT_BROKER = "tcp://localhost:61616";
+    private static final String TOPIC = "mqtt-message-in/1/2/app/test";
+
+    // @Inject
+    // MqttConsumerService mqttConsumerService;
 
     @GET
     @Produces(MediaType.TEXT_PLAIN)
@@ -39,32 +36,45 @@ public class MqttResource {
     @Path("/send")
     @Produces(MediaType.TEXT_PLAIN)
     public String sendMessage() {
+        System.out.println("Enviando mensagens: " + TOPIC);
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
-            int i = 0;
-            String token = "";
-            Map<String, String> headers = new HashMap<>();
-            headers.put("Authorization", token);
+            try {
+                int i = 0;
+                while (true) {
+                    MqttClient mqttClient = new MqttClient(MQTT_BROKER, MqttClient.generateClientId());
+                    mqttClient.connect();
+                    MqttSendMessage mqttMes = new MqttSendMessage();
+                    mqttMes.setJwt("Token");
+                    mqttMes.setMessage("message to kafka " + i);
 
-            while (true) {
-                headers.put("Authorization", "12345");
+                    MqttMessage mqttMessage = new MqttMessage();
+                    mqttMessage.setPayload(mqttMes.serialize());
 
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    System.out.println("Error sent: " + i);
+                    mqttClient.publish(TOPIC, mqttMessage);
+
+                    mqttClient.disconnect();
+                    i++;
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        System.out.println("Error sent: ");
+                    }
                 }
-                Message<String> mqttMessage = Message.of(String.valueOf(i)).addMetadata(headers);
 
-                System.out.println("Message payload: " + mqttMessage.getPayload());
-                System.out.println("Message headers: ");
-                mqttMessageEmitter.send(mqttMessage);
-                System.out.println("Message sent: " + i);
-                i++;
-                headers.clear();
+            } catch (MqttException e) {
+                System.out.println("Failed to publish message to MQTT broker: " + e.getMessage());
+                e.printStackTrace();
             }
         });
-        executor.shutdown();
-        return "Enviado ";
+
+        return "Message published to MQTT broker: ";
     }
+
+    // @GET
+    // @Path("receive")
+    // public String receive() {
+    // mqttConsumerService.startMqttConsumer();
+    // return "Consumindo";
+    // }
 }

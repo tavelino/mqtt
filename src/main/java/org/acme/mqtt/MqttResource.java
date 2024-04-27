@@ -8,6 +8,7 @@ import jakarta.ws.rs.core.MediaType;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
@@ -19,7 +20,9 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 @Path("/mqtt")
 public class MqttResource {
 
-    private static final String MQTT_BROKER = "tcp://localhost:61616";
+    @Inject
+    @ConfigProperty(name = "mqtt.artemis.server")
+    private String MQTT_BROKER;
     private static final String TOPIC = "mqtt-message-in/1/2/app/test";
 
     // @Inject
@@ -47,6 +50,7 @@ public class MqttResource {
                     MqttSendMessage mqttMes = new MqttSendMessage();
                     mqttMes.setJwt("Token");
                     mqttMes.setMessage("message to kafka " + i);
+                    System.out.println("Enviando mensagens: " + mqttMes.getMessage());
 
                     MqttMessage mqttMessage = new MqttMessage();
                     mqttMessage.setPayload(mqttMes.serialize());

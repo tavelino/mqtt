@@ -7,6 +7,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.paho.client.mqttv3.*;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -17,7 +18,9 @@ import jakarta.inject.Inject;
 @RegisterForReflection
 public class MqttConsumerService {
 
-    private static final String MQTT_BROKER = "tcp://localhost:61616";
+    @Inject
+    @ConfigProperty(name = "mqtt.artemis.server")
+    private String MQTT_BROKER;
     private static final String TOPIC = "mqtt-message-in/1/2/app/test";
 
     @Inject
@@ -31,23 +34,33 @@ public class MqttConsumerService {
         return parts[parts.length - 2] + "." + parts[parts.length - 1];
     }
 
+    public static String transformKey() {
+        // Find the index of the third occurrence of "/"
+        int thirdSlashIndex = TOPIC.indexOf('/', TOPIC.indexOf('/') + 1);
+        thirdSlashIndex = TOPIC.indexOf('/', thirdSlashIndex + 1);
+
+        // Extract the substring up to the third occurrence of "/"
+        String firstThreeParts = TOPIC.substring(0, thirdSlashIndex);
+
+        // Replace remaining "/" with "."
+        return firstThreeParts.replace('/', '.');
+    }
+
     public void startMqttConsumer() {
         managedExecutor.execute(() -> {
             try {
                 MqttClient mqttClient = new MqttClient(MQTT_BROKER,
                         MqttClient.generateClientId());
                 mqttClient.connect();
-                System.out.println("Connected to MQTT broker");
+                System.out.println("Connected to MQTT broker: " + MQTT_BROKER);
 
                 mqttClient.subscribe(TOPIC, (topic, message) -> {
                     MqttSendMessage receivedMessage = deserialize(message.getPayload());
                     System.out.println("Received message: " + receivedMessage.getMessage());
                     KafkaSend producer = new KafkaSend();
-                    producer.sendMessage(receivedMessage, transformTopic());
+                    producer.sendMessage(receivedMessage, transformKey(), transformTopic());
 
                 });
-
-                System.out.println("Subscribed to topic: " + TOPIC);
 
             } catch (MqttException e) {
                 e.printStackTrace();
@@ -56,6 +69,8 @@ public class MqttConsumerService {
     }
 
     void onStart(@Observes StartupEvent ev) {
+        System.out.println("Connecting to MQTT broker: " + MQTT_BROKER);
+
         startMqttConsumer();
     }
 

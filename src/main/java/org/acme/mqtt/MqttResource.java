@@ -9,9 +9,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
 
 /**
  * A simple resource retrieving the "in-memory" "my-data-stream" and sending the
@@ -24,6 +21,9 @@ public class MqttResource {
     @ConfigProperty(name = "mqtt.artemis.server")
     private String MQTT_BROKER;
     private static final String TOPIC = "mqtt-message-in/1/2/app/test";
+
+    @Inject
+    MqttProducer mqttProducer;
 
     // @Inject
     // MqttConsumerService mqttConsumerService;
@@ -39,39 +39,23 @@ public class MqttResource {
     @Path("/send")
     @Produces(MediaType.TEXT_PLAIN)
     public String sendMessage() {
-        System.out.println("Enviando mensagens: " + TOPIC);
         ExecutorService executor = Executors.newSingleThreadExecutor();
+        MqttSendMessage mqttMes = new MqttSendMessage();
+        mqttMes.setJwt("Token");
         executor.execute(() -> {
-            try {
+            while (true) {
                 int i = 0;
-                while (true) {
-                    MqttClient mqttClient = new MqttClient(MQTT_BROKER, MqttClient.generateClientId());
-                    mqttClient.connect();
-                    MqttSendMessage mqttMes = new MqttSendMessage();
-                    mqttMes.setJwt("Token");
-                    mqttMes.setMessage("message to kafka " + i);
-                    System.out.println("Enviando mensagens: " + mqttMes.getMessage());
-
-                    MqttMessage mqttMessage = new MqttMessage();
-                    mqttMessage.setPayload(mqttMes.serialize());
-
-                    mqttClient.publish(TOPIC, mqttMessage);
-
-                    mqttClient.disconnect();
-                    i++;
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        System.out.println("Error sent: ");
-                    }
+                mqttMes.setMessage("message to kafka " + i);
+                mqttProducer.setTopic(TOPIC);
+                mqttProducer.Produce(mqttMes);
+                i++;
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    System.out.println("Error sent: ");
                 }
-
-            } catch (MqttException e) {
-                System.out.println("Failed to publish message to MQTT broker: " + e.getMessage());
-                e.printStackTrace();
             }
         });
-
         return "Message published to MQTT broker: ";
     }
 

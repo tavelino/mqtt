@@ -13,6 +13,8 @@ import org.eclipse.paho.client.mqttv3.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import lombok.Getter;
+import lombok.Setter;
 
 @ApplicationScoped
 @RegisterForReflection
@@ -21,12 +23,15 @@ public class MqttConsumerService {
     @Inject
     @ConfigProperty(name = "mqtt.artemis.server")
     private String MQTT_BROKER;
-    private static final String TOPIC = "mqtt-message-in/1/2/app/test";
+
+    @Getter
+    @Setter
+    private String TOPIC = "mqtt-message-in/1/2/app/test";
 
     @Inject
     ManagedExecutor managedExecutor;
 
-    public static String transformTopic() {
+    public String transformTopic() {
         // Split the topic string by '/'
         String[] parts = TOPIC.split("/");
 
@@ -34,7 +39,7 @@ public class MqttConsumerService {
         return parts[parts.length - 2] + "." + parts[parts.length - 1];
     }
 
-    public static String transformKey() {
+    public String transformKey() {
         // Find the index of the third occurrence of "/"
         int thirdSlashIndex = TOPIC.indexOf('/', TOPIC.indexOf('/') + 1);
         thirdSlashIndex = TOPIC.indexOf('/', thirdSlashIndex + 1);

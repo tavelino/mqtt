@@ -12,9 +12,11 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Scope;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import io.opentelemetry.api.GlobalOpenTelemetry;
 
 @ApplicationScoped
 public class KafkaSend {
+
     @Inject
     Tracer tracer;
 
@@ -23,26 +25,28 @@ public class KafkaSend {
     private String BOOTSTRAP_SERVERS = "my-cluster-kafka-bootstrap:9092";
 
     public void sendMessage(MqttSendMessage message, String key, String topic) {
+        tracer = GlobalOpenTelemetry.getTracer("mqtt-kafka", "1.0");
 
         // Start a span for this operation
-        Span span = tracer.spanBuilder("Send-Message")
+        Span span = tracer.spanBuilder("Producer-Message-Kafka")
                 .setSpanKind(SpanKind.PRODUCER).setAttribute(key, topic)
                 .startSpan();
-        try (Scope scope = span.makeCurrent()) {
-            // Kafka producer configuration
-            Properties props = new Properties();
-            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                    "org.apache.kafka.common.serialization.StringSerializer");
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.acme.mqtt.MqttSendMessageSerializer");
+        // Kafka producer configuration
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                "org.apache.kafka.common.serialization.StringSerializer");
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.acme.mqtt.MqttSendMessageSerializer");
 
-            // Create Kafka producer
-            Producer<String, MqttSendMessage> producer = new KafkaProducer<>(props);
+        // Create Kafka producer
+        Producer<String, MqttSendMessage> producer = new KafkaProducer<>(props);
 
-            try {
-                // Create a message
+        try {
+            // Create a message
 
-                // Send the message to the topic
+            // Send the message to the topic
+            try (Scope scope = span.makeCurrent()) {
+
                 ProducerRecord<String, MqttSendMessage> record = new ProducerRecord<>(topic, key, message);
                 producer.send(record, (metadata, exception) -> {
                     if (exception != null) {
@@ -51,17 +55,18 @@ public class KafkaSend {
                         // Add any additional processing here
                     }
                 });
-
-                // Flush and close the producer
-                producer.flush();
-            } catch (Exception e) {
-                System.err.println("Exception occurred: " + e.getMessage());
             } finally {
-                producer.close();
+                // End the span
+                span.end();
             }
+
+            // Flush and close the producer
+            producer.flush();
+        } catch (Exception e) {
+            System.err.println("Exception occurred: " + e.getMessage());
         } finally {
-            // End the span
-            span.end();
+            producer.close();
         }
+
     }
 }

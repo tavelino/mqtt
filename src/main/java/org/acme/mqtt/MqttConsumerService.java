@@ -1,5 +1,10 @@
 package org.acme.mqtt;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -31,6 +36,9 @@ public class MqttConsumerService {
     @Inject
     ManagedExecutor managedExecutor;
 
+    @Inject
+    Tracer tracer;
+
     public String transformTopic() {
         // Split the topic string by '/'
         String[] parts = TOPIC.split("/");
@@ -52,20 +60,29 @@ public class MqttConsumerService {
     }
 
     public void startMqttConsumer() {
+        tracer = GlobalOpenTelemetry.getTracer("mqtt-kafka", "1.0");
+        Span span = tracer.spanBuilder("Consumer-Message-Mqtt")
+                .setSpanKind(SpanKind.PRODUCER).setAttribute("topic", TOPIC)
+                .startSpan();
         managedExecutor.execute(() -> {
             try {
-                MqttClient mqttClient = new MqttClient(MQTT_BROKER,
-                        MqttClient.generateClientId());
-                mqttClient.connect();
-                System.out.println("Connected to MQTT broker: " + MQTT_BROKER);
+                try (Scope scope = span.makeCurrent()) {
 
-                mqttClient.subscribe(TOPIC, (topic, message) -> {
-                    MqttSendMessage receivedMessage = deserialize(message.getPayload());
-                    System.out.println("Received message: " + receivedMessage.getMessage());
-                    KafkaSend producer = new KafkaSend();
-                    producer.sendMessage(receivedMessage, transformKey(), transformTopic());
+                    MqttClient mqttClient = new MqttClient(MQTT_BROKER,
+                            MqttClient.generateClientId());
+                    mqttClient.connect();
+                    System.out.println("Connected to MQTT broker: " + MQTT_BROKER);
 
-                });
+                    mqttClient.subscribe(TOPIC, (topic, message) -> {
+                        MqttSendMessage receivedMessage = deserialize(message.getPayload());
+                        System.out.println("Received message: " + receivedMessage.getMessage());
+                        KafkaSend producer = new KafkaSend();
+                        producer.sendMessage(receivedMessage, transformKey(), transformTopic());
+
+                    });
+                } finally {
+                    span.end();
+                }
 
             } catch (MqttException e) {
                 e.printStackTrace();

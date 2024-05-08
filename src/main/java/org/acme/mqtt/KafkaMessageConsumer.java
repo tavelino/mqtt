@@ -7,7 +7,11 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -22,6 +26,8 @@ import java.util.concurrent.Executors;
 @ApplicationScoped
 public class KafkaMessageConsumer {
 
+    @Inject
+    Tracer tracer;
     private final KafkaConsumer<String, MqttSendMessage> consumer;
 
     @Inject
@@ -51,8 +57,11 @@ public class KafkaMessageConsumer {
     }
 
     public void consumeMessages() {
+        tracer = GlobalOpenTelemetry.getTracer("mqtt-kafka", "1.0");
+
         System.out.println("Começando a consumir do topico: " + topic);
         consumer.subscribe(Collections.singleton(topic));
+
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
             while (true) {
@@ -61,33 +70,42 @@ public class KafkaMessageConsumer {
                 // needed
 
                 records.forEach(record -> {
-                    MqttSendMessage message = new MqttSendMessage();
-                    if (record.value().equals(null)) {
-                        System.out.println("Enviando para o kafka com message: " + record.value().getMessage());
+                    Span span = tracer.spanBuilder("Consume-Message-Kafka")
+                            .setSpanKind(SpanKind.PRODUCER).setAttribute(record.key(), topic)
+                            .startSpan();
+                    try (Scope scope = span.makeCurrent()) {
 
-                    } else {
-                        message = record.value();
+                        MqttSendMessage message = new MqttSendMessage();
+                        if (record.value().equals(null)) {
+                            System.out.println("Enviando para o kafka com message: " + record.value().getMessage());
 
+                        } else {
+                            message = record.value();
+
+                        }
+                        if (topic.endsWith(".push")) {
+                            message.setMessage("Mensagem consumida");
+
+                            System.out.println("Message com push: " + message.getMessage());
+
+                            MqttProducer mqtt = new MqttProducer();
+                            // mqtt.setTopic(transformTopic(record.key(), topic));
+                            mqtt.setTopic(topic);
+
+                            mqtt.Produce(message);
+                        } else {
+                            message.setMessage(message.getMessage() + "- Mensagem consumida");
+                            System.out.println("Enviando para o kafka com push: " + message.getMessage());
+                            new KafkaSend().sendMessage(message, record.key(), topic + ".push");
+
+                        }
+
+                        // Process the received message here
+                        System.out.println("Received message: " + message.getMessage());
+                    } finally {
+                        // End the span
+                        span.end();
                     }
-                    if (topic.endsWith(".push")) {
-                        message.setMessage("Mensagem consumida");
-
-                        System.out.println("Message com push: " + message.getMessage());
-
-                        MqttProducer mqtt = new MqttProducer();
-                        // mqtt.setTopic(transformTopic(record.key(), topic));
-                        mqtt.setTopic(topic);
-
-                        mqtt.Produce(message);
-                    } else {
-                        message.setMessage(message.getMessage() + "- Mensagem consumida");
-                        System.out.println("Enviando para o kafka com push: " + message.getMessage());
-                        new KafkaSend().sendMessage(message, record.key(), topic + ".push");
-
-                    }
-
-                    // Process the received message here
-                    System.out.println("Received message: " + message.getMessage());
                 });
             }
         });
